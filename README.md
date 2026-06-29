@@ -103,6 +103,24 @@ Open http://localhost:8501 in your browser.
 
 ---
 
+## 🧬 Meme Dataset Annotation (ScrapeGraph-AI)
+
+Retargeting SmartScrape from books to **Know Your Meme**? The annotation pipeline
+turns ~40k meme URLs into information-rich, MongoDB-ready JSON using
+[ScrapeGraph-AI](https://github.com/ScrapeGraphAI/Scrapegraph-ai) + an LLM (the
+*teacher*), producing the labeled corpus the GNN+ILP model (the *student*) trains on.
+
+```bash
+pip install -r requirements-annotation.txt
+python annotate_memes.py --mock --input data/meme_urls.sample.json --limit 5   # offline demo
+python annotate_memes.py --input data/meme_urls.json --output data/annotations.jsonl
+```
+
+Resumable, provider-agnostic (OpenAI/Anthropic/Google/Ollama), and crash-safe.
+Full guide: **[docs/MEME_ANNOTATION.md](docs/MEME_ANNOTATION.md)**.
+
+---
+
 ## 🏋️ Training Your Own Model
 
 ### Step 1 — Annotate pages

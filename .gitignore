@@ -18,6 +18,10 @@ src/learning/drift_history.json
 src/learning/active_learning_queries.json
 *.log
 
+# Annotation pipeline output (keep the *.sample.json inputs, ignore generated)
+data/annotations.jsonl
+data/annotations*.jsonl
+
 # OS / IDE
 .DS_Store
 .idea/
