@@ -25,6 +25,12 @@ class TestMergeDiscovery(unittest.TestCase):
         self.assertTrue(merged["Confirmed"])           # never downgraded
         self.assertEqual(merged["lastmod"], "2026-01-01")  # null new keeps old
 
+    def test_non_confirmed_has_null_lastmod(self):
+        # A stray lastmod on a non-confirmed record is dropped.
+        merged = merge_discovery(None, _rec("u", confirmed=False, lastmod="2026-01-01"))
+        self.assertFalse(merged["Confirmed"])
+        self.assertIsNone(merged["lastmod"])
+
     def test_last_scraped_preserved(self):
         old = _rec("u", last_scraped="2026-02-02T00:00:00Z")
         merged = merge_discovery(old, _rec("u"))

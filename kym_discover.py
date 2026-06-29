@@ -215,9 +215,14 @@ def make_record(url: str, lastmod: str | None, existing_record: dict | None,
     Build a discovery record. ``last_scraped`` from an existing record is
     preserved. ``Confirmed`` defaults to "has a sitemap lastmod" unless an
     explicit value is supplied (e.g. from a status listing).
+
+    Invariant: only confirmed entries carry a ``lastmod``; non-confirmed
+    entries always have ``lastmod = None``.
     """
     if confirmed is None:
         confirmed = lastmod is not None
+    if not confirmed:
+        lastmod = None
     return {
         "url": url,
         "namespace": namespace_of(urlparse(url).path),

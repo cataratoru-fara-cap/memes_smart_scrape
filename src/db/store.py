@@ -48,7 +48,9 @@ def merge_discovery(old: Dict[str, Any] | None, new: Dict[str, Any]) -> Dict[str
       * ``Confirmed`` is monotonic: once True it stays True. This lets the
         sitemap (confirmed) and the crawl (submissions/deadpool) cooperate
         without the crawl downgrading a confirmed entry.
-      * ``lastmod`` is updated only when the new value is non-null.
+      * ``lastmod`` is updated only when the new value is non-null, and is
+        forced to None for non-confirmed entries (only confirmed memes carry a
+        lastmod).
       * Other discovery fields overwrite.
     """
     merged: Dict[str, Any] = dict(old) if old else {}
@@ -65,6 +67,9 @@ def merge_discovery(old: Dict[str, Any] | None, new: Dict[str, Any]) -> Dict[str
             merged[field] = new[field]
 
     merged["Confirmed"] = bool((old or {}).get("Confirmed", False) or new.get("Confirmed", False))
+    # Invariant: only confirmed entries carry a lastmod; non-confirmed -> None.
+    if not merged["Confirmed"]:
+        merged["lastmod"] = None
     old_last_scraped = (old or {}).get("last_scraped")
     merged["last_scraped"] = old_last_scraped if old_last_scraped is not None else new.get("last_scraped")
     return merged

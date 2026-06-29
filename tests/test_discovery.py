@@ -53,6 +53,12 @@ class TestNamespaceAndRecord(unittest.TestCase):
         r2 = kd.make_record("https://knowyourmeme.com/memes/a", None, None)
         self.assertFalse(r2["Confirmed"])
 
+    def test_non_confirmed_lastmod_forced_null(self):
+        # lastmod only belongs to confirmed entries.
+        r = kd.make_record("https://knowyourmeme.com/memes/a", "2026-01-01", None, confirmed=False)
+        self.assertFalse(r["Confirmed"])
+        self.assertIsNone(r["lastmod"])
+
     def test_make_record_explicit_confirmed_and_resume(self):
         existing = {"last_scraped": "2026-02-02T00:00:00Z"}
         r = kd.make_record("https://knowyourmeme.com/memes/a", None, existing, confirmed=True)
