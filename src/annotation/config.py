@@ -44,6 +44,9 @@ class AnnotationConfig:
     base_url: Optional[str] = field(default_factory=lambda: os.getenv("ANNOTATION_LLM_BASE_URL") or None)
 
     # --- IO ---
+    # source: "file" reads URL records from input_path; "mongo" ingests the
+    # discovery output from the MongoDB ``urls`` collection (see src/db).
+    source: str = field(default_factory=lambda: os.getenv("ANNOTATION_SOURCE", "file").lower())
     input_path: str = field(default_factory=lambda: os.getenv("ANNOTATION_INPUT_PATH", "data/meme_urls.sample.json"))
     output_path: str = field(default_factory=lambda: os.getenv("ANNOTATION_OUTPUT_PATH", "data/annotations.jsonl"))
 

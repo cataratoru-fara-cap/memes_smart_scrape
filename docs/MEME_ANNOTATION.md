@@ -83,6 +83,19 @@ python annotate_memes.py \
   --concurrency 4
 ```
 
+### 3b. Ingest from MongoDB (recommended at scale)
+
+When discovery has populated MongoDB (`kym_discover.py --mongo`, see
+[DISCOVERY.md](DISCOVERY.md)), annotate straight from it — no JSON file needed:
+
+```bash
+python annotate_memes.py --source mongo
+```
+
+This reads pending records (`Confirmed: true`, `last_scraped: null`) from the
+`urls` collection, writes extracted docs to the `annotations` collection, and
+stamps `last_scraped` back on `urls`. Both stages stay in sync and resumable.
+
 Swap the LLM provider/model from the CLI or `.env`:
 
 ```bash

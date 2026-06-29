@@ -81,19 +81,66 @@ def _annotate_one(annotator, record: Dict[str, Any], cfg: AnnotationConfig,
     )
 
 
-def run(cfg: AnnotationConfig, *, mock: bool, limit: int, force: bool) -> int:
-    records = url_store.load_url_records(cfg.input_path)
-    writer = url_store.AnnotationWriter(cfg.output_path)
-    done = writer.existing_urls()
+class _FileSink:
+    """Write annotation docs to a JSONL file (resume via existing_urls)."""
 
-    pending: List[Dict[str, Any]] = list(
+    def __init__(self, output_path: str):
+        self.writer = url_store.AnnotationWriter(output_path)
+
+    def existing_urls(self):
+        return self.writer.existing_urls()
+
+    def __enter__(self):
+        self.writer.__enter__()
+        return self
+
+    def write(self, doc: Dict[str, Any]) -> None:
+        self.writer.write(doc)
+
+    def __exit__(self, *exc) -> None:
+        self.writer.__exit__(*exc)
+
+
+class _MongoSink:
+    """Write annotation docs to MongoDB (annotations coll + mark last_scraped)."""
+
+    def __init__(self, store):
+        self.store = store
+
+    def __enter__(self):
+        return self
+
+    def write(self, doc: Dict[str, Any]) -> None:
+        self.store.save_annotation(doc)
+
+    def __exit__(self, *exc) -> None:
+        self.store.close()
+
+
+def _gather(cfg: AnnotationConfig, force: bool):
+    """Resolve (pending_records, sink, source_label) for the configured source."""
+    if cfg.source == "mongo":
+        from src.db.mongo import get_store
+        store = get_store()
+        pending = list(store.iter_pending(only_confirmed=cfg.only_confirmed, force=force))
+        return pending, _MongoSink(store), f"mongo({store.count_urls()} urls)"
+
+    records = url_store.load_url_records(cfg.input_path)
+    sink = _FileSink(cfg.output_path)
+    done = sink.existing_urls()
+    pending = list(
         url_store.iter_pending(records, done, only_confirmed=cfg.only_confirmed, force=force)
     )
+    return pending, sink, f"file:{cfg.input_path} ({len(records)} urls)"
+
+
+def run(cfg: AnnotationConfig, *, mock: bool, limit: int, force: bool) -> int:
+    pending, sink, source_label = _gather(cfg, force)
+
     if limit and limit > 0:
         pending = pending[:limit]
 
-    print(f"[annotate] input={cfg.input_path}  total={len(records)}  "
-          f"already_done={len(done)}  pending={len(pending)}")
+    print(f"[annotate] source={source_label}  pending={len(pending)}")
     print(f"[annotate] provider={cfg.provider}  model={cfg.model}  "
           f"mock={mock}  concurrency={cfg.concurrency}")
     if not pending:
@@ -104,7 +151,7 @@ def run(cfg: AnnotationConfig, *, mock: bool, limit: int, force: bool) -> int:
     limiter = _RateLimiter(cfg.rate_limit_per_min)
 
     ok = fail = 0
-    with writer:
+    with sink:
         with ThreadPoolExecutor(max_workers=max(1, cfg.concurrency)) as pool:
             futures = {
                 pool.submit(_annotate_one, annotator, r, cfg, limiter): r
@@ -112,7 +159,7 @@ def run(cfg: AnnotationConfig, *, mock: bool, limit: int, force: bool) -> int:
             }
             for i, fut in enumerate(as_completed(futures), 1):
                 doc = fut.result()
-                writer.write(doc)
+                sink.write(doc)
                 if doc["_annotation"]["ok"]:
                     ok += 1
                 else:
@@ -121,14 +168,17 @@ def run(cfg: AnnotationConfig, *, mock: bool, limit: int, force: bool) -> int:
                 if i % 25 == 0 or i == len(pending):
                     print(f"[annotate] {i}/{len(pending)} done  (ok={ok} fail={fail})")
 
-    print(f"[annotate] Finished: ok={ok} fail={fail}  ->  {cfg.output_path}")
+    dest = "mongo" if cfg.source == "mongo" else cfg.output_path
+    print(f"[annotate] Finished: ok={ok} fail={fail}  ->  {dest}")
     return 0 if fail == 0 else 1
 
 
 def parse_args(argv=None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Annotate Know Your Meme URLs with ScrapeGraph-AI.")
-    p.add_argument("--input", help="Input JSON/JSONL file or directory of records.")
-    p.add_argument("--output", help="Output JSONL path (MongoDB-ready).")
+    p.add_argument("--source", choices=["file", "mongo"],
+                   help="Where to read URL records from (default: file / $ANNOTATION_SOURCE).")
+    p.add_argument("--input", help="Input JSON/JSONL file or directory of records (file source).")
+    p.add_argument("--output", help="Output JSONL path, MongoDB-ready (file source).")
     p.add_argument("--provider", help="LLM provider (openai|anthropic|google|ollama).")
     p.add_argument("--model", help="LLM model name.")
     p.add_argument("--concurrency", type=int, help="Parallel workers.")
@@ -142,6 +192,8 @@ def main(argv=None) -> int:
     args = parse_args(argv)
     cfg = AnnotationConfig()
     # CLI overrides env/defaults.
+    if args.source:
+        cfg.source = args.source
     if args.input:
         cfg.input_path = args.input
     if args.output:
