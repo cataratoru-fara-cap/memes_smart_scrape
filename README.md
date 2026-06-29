@@ -103,6 +103,40 @@ Open http://localhost:8501 in your browser.
 
 ---
 
+## 🧬 Know Your Meme Pipeline (discovery → annotation)
+
+Retargeting SmartScrape from books to **Know Your Meme**? Two stages feed the
+model, joined by a MongoDB hub:
+
+```
+kym_discover.py ──> urls (JSON / MongoDB) ──> annotate_memes.py ──> annotations
+   (sitemaps +                                  (ScrapeGraph-AI + LLM:
+    listing crawl)                               information-rich extraction)
+```
+
+**1. Discovery** — find (nearly) every entry URL:
+
+```bash
+pip install -r requirements-discovery.txt
+python kym_discover.py --mongo        # sitemaps + status-listing crawl -> MongoDB
+```
+
+**2. Annotation** — extract rich meme data (the *teacher* labeling the corpus the
+GNN+ILP *student* will train on), via
+[ScrapeGraph-AI](https://github.com/ScrapeGraphAI/Scrapegraph-ai):
+
+```bash
+pip install -r requirements-annotation.txt
+python annotate_memes.py --mock --input data/meme_urls.sample.json --limit 5  # offline demo
+python annotate_memes.py --source mongo                                        # ingest from MongoDB
+```
+
+Both stages are resumable, crash-safe, and provider-agnostic
+(OpenAI/Anthropic/Google/Ollama). Guides:
+**[docs/DISCOVERY.md](docs/DISCOVERY.md)** · **[docs/MEME_ANNOTATION.md](docs/MEME_ANNOTATION.md)**.
+
+---
+
 ## 🏋️ Training Your Own Model
 
 ### Step 1 — Annotate pages
