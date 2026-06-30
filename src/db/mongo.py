@@ -108,6 +108,9 @@ class MongoStore:
             }},
         )
 
+    def iter_annotations(self) -> Iterator[Dict[str, Any]]:
+        yield from self.annotations.find({})
+
     def count_urls(self) -> int:
         return self.urls.count_documents({})
 

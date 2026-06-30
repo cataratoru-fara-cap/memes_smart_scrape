@@ -21,12 +21,14 @@ This repo holds two complementary halves:
    (retargeted from books to memes) will learn from.
 
 ```
-kym_discover.py ──▶ urls (JSON / MongoDB) ──▶ annotate_memes.py ──▶ annotations ──▶ (GNN + ILP model)
-  sitemaps +           discovery index          ScrapeGraph-AI + LLM    rich meme        future
-  listing crawl                                 (information-rich)       records          retarget
+kym_discover.py ──▶ urls (JSON/MongoDB) ──▶ annotate_memes.py ──▶ annotations ──▶ GNN+ILP student
+  sitemaps +          discovery index         ScrapeGraph-AI + LLM   rich meme       (train + serve
+  listing crawl                               (teacher)             records          meme info)
 ```
 
-Pipeline guides: **[docs/DISCOVERY.md](docs/DISCOVERY.md)** · **[docs/MEME_ANNOTATION.md](docs/MEME_ANNOTATION.md)**.
+Pipeline guides: **[docs/DISCOVERY.md](docs/DISCOVERY.md)** ·
+**[docs/MEME_ANNOTATION.md](docs/MEME_ANNOTATION.md)** ·
+**[docs/STUDENT_MODEL.md](docs/STUDENT_MODEL.md)**.
 
 ---
 
@@ -150,9 +152,22 @@ python annotate_memes.py --mock --input data/meme_urls.sample.json --limit 5  # 
 python annotate_memes.py --source mongo                                        # ingest from MongoDB
 ```
 
-Both stages are resumable, crash-safe, and provider-agnostic
+**3. Student model** — the SmartScrape GNN+ILP extractor retargeted to memes.
+Trains on the teacher's annotations, then extracts the structured info-box
+fields (title/type/status/origin/year) **without an LLM** — cheap, fast, auditable:
+
+```bash
+pip install -r requirements-model.txt && playwright install chromium
+python build_meme_dataset.py --annotations data/annotations.jsonl   # render + align -> labels
+python train_meme_gnn.py                                            # -> meme_model.pt
+python infer_meme.py --url https://knowyourmeme.com/memes/doge      # proof-carrying record
+```
+
+All stages are resumable, crash-safe, and provider-agnostic
 (OpenAI/Anthropic/Google/Ollama). Guides:
-**[docs/DISCOVERY.md](docs/DISCOVERY.md)** · **[docs/MEME_ANNOTATION.md](docs/MEME_ANNOTATION.md)**.
+**[docs/DISCOVERY.md](docs/DISCOVERY.md)** ·
+**[docs/MEME_ANNOTATION.md](docs/MEME_ANNOTATION.md)** ·
+**[docs/STUDENT_MODEL.md](docs/STUDENT_MODEL.md)**.
 
 ---
 
@@ -193,22 +208,35 @@ memes_smart_scrape/
 ├── Meme data pipeline ─────────────────────────────────────────────
 │   ├── kym_discover.py             # Phase A: discover KYM URLs (sitemaps + crawl)
 │   ├── annotate_memes.py           # Phase B: annotate URLs -> rich records (CLI)
+│   ├── build_meme_dataset.py       # Phase C: render + align annotations -> labels
+│   ├── train_meme_gnn.py           # Phase C: train the student -> meme_model.pt
+│   ├── infer_meme.py               # Phase C: run the student on a page (CLI)
 │   ├── requirements-discovery.txt  # deps for discovery (requests, bs4, lxml, pymongo)
 │   ├── requirements-annotation.txt # deps for annotation (scrapegraphai, pydantic, pymongo)
+│   ├── requirements-model.txt      # deps for the student (torch, torch-geometric, ortools, playwright)
 │   ├── docs/
 │   │   ├── DISCOVERY.md            # discovery guide
-│   │   └── MEME_ANNOTATION.md      # annotation guide
+│   │   ├── MEME_ANNOTATION.md      # annotation guide
+│   │   └── STUDENT_MODEL.md        # GNN+ILP student guide
 │   ├── data/
 │   │   └── meme_urls.sample.json   # sample discovery records (for --mock)
 │   └── src/
-│       ├── db/                     # MongoDB hub shared by both phases
+│       ├── db/                     # MongoDB hub shared by all phases
 │       │   ├── store.py            # pure merge logic + InMemoryStore (dep-free)
 │       │   └── mongo.py            # pymongo MongoStore (urls + annotations)
-│       └── annotation/
-│           ├── meme_schema.py      # extracted fields (entry vs editorial)
-│           ├── annotator.py        # ScrapeGraph-AI wrapper + MockAnnotator
-│           ├── url_store.py        # file IO, resume, Mongo-ready documents
-│           └── config.py           # env-driven, swappable LLM provider
+│       ├── annotation/
+│       │   ├── meme_schema.py      # extracted fields (entry vs editorial)
+│       │   ├── annotator.py        # ScrapeGraph-AI wrapper + MockAnnotator
+│       │   ├── url_store.py        # file IO, resume, Mongo-ready documents
+│       │   └── config.py           # env-driven, swappable LLM provider
+│       ├── learning/               # student model (meme retarget)
+│       │   ├── meme_config.py      # class space, paths, thresholds
+│       │   ├── meme_labels.py      # teacher->student label alignment (pure)
+│       │   ├── meme_encoding.py    # meme label space + graph builder
+│       │   ├── meme_pipeline.py    # inference: render->GNN->priors->ILP
+│       │   └── kym_render.py       # Playwright DOM -> nodes (proxy-aware)
+│       └── reasoning/
+│           └── meme_solver.py      # spec-driven ILP + greedy fallback
 │
 ├── Books demo (original SmartScrape) ──────────────────────────────
 │   ├── app.py                      # Streamlit demo application
@@ -226,7 +254,8 @@ memes_smart_scrape/
 └── tests/                          # offline test suite (unittest)
     ├── test_discovery.py           # URL classification, sitemap, taxonomy
     ├── test_db_store.py            # storage layer + discovery->annotation flow
-    └── test_meme_annotation.py     # schema, resume, mock pipeline
+    ├── test_meme_annotation.py     # schema, resume, mock pipeline
+    └── test_meme_student.py        # alignment, ILP solver, inference pipeline
 ```
 
 ---
@@ -304,6 +333,7 @@ python -m unittest discover -s tests -p "test_*.py"
 - `tests/test_discovery.py` — URL classification, sitemap parsing, taxonomy inference.
 - `tests/test_db_store.py` — storage layer + the discovery → annotation flow (via `InMemoryStore`).
 - `tests/test_meme_annotation.py` — schema normalisation, resume logic, end-to-end mock run.
+- `tests/test_meme_student.py` — teacher→student alignment, ILP solver constraints, inference pipeline.
 
 A few HTML-parsing tests auto-skip when `beautifulsoup4` isn't installed. The
 annotation CLI also has a `--mock` mode (`python annotate_memes.py --mock --limit 5`)
