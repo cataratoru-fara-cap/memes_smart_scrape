@@ -22,7 +22,9 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Sequence
 
-from src.learning.meme_config import MEME_CLASSES, SINGLETON_FIELDS, STATUS_VALUES
+from src.learning.meme_config import (
+    CLASS_TO_FIELD, MEME_CLASSES, MULTI_FIELDS, SINGLETON_FIELDS, STATUS_VALUES,
+)
 
 _YEAR_RE = re.compile(r"(?:18|19|20)\d{2}")
 _WS = re.compile(r"\s+")
@@ -55,7 +57,8 @@ class MemeConstraintSolver:
                  title_zone_max_px: float | None = None):
         self.classes = list(classes)
         self.cls_to_idx = {c: i for i, c in enumerate(self.classes)}
-        self.fields = [f for f in SINGLETON_FIELDS if f in self.cls_to_idx]
+        self.fields = [f for f in SINGLETON_FIELDS if f in self.cls_to_idx]  # uniqueness
+        self.multi_fields = [f for f in MULTI_FIELDS if f in self.cls_to_idx]
         self.title_zone_max_px = title_zone_max_px
 
     # ------------------------------------------------------------------
@@ -138,7 +141,11 @@ class MemeConstraintSolver:
 
     # ------------------------------------------------------------------
     def _greedy(self, nodes, probs, reason="fallback") -> Dict[str, Any]:
-        """Pure-Python fallback: best valid node per field, respecting formats."""
+        """
+        Pure-Python fallback. Singletons: best valid node per field (uniqueness +
+        format). Multi: every still-free node whose argmax class is that multi
+        field (so a multi class can claim several nodes).
+        """
         best: Dict[str, tuple] = {}  # field -> (score, idx)
         for field in self.fields:
             fi = self.cls_to_idx[field]
@@ -154,6 +161,16 @@ class MemeConstraintSolver:
                     best[field] = (score, i)
 
         assignments = [(field, idx) for field, (_, idx) in best.items()]
+        claimed = {idx for _, idx in assignments}
+
+        multi_idx = {self.cls_to_idx[f] for f in self.multi_fields}
+        for i in range(len(nodes)):
+            if i in claimed:
+                continue
+            j = max(range(len(self.classes)), key=lambda jj: float(probs[i][jj]))
+            if j in multi_idx:
+                assignments.append((self.classes[j], i))
+
         meta = {
             "backend": "greedy fallback", "status": "FALLBACK", "reason": reason,
             "constraints": [], "relaxed": ["all"], "fallback_used": True,
@@ -168,13 +185,18 @@ class MemeConstraintSolver:
             if cls == "other":
                 continue
             j = self.cls_to_idx[cls]
-            record[cls] = {
+            item = {
                 "text": nodes[i].get("text", ""),
                 "bbox": nodes[i].get("bbox") or [0, 0, 0, 0],
                 "confidence": float(probs[i][j]),
                 "node_id": nodes[i].get("id", i),
                 "solver_variable": f"x[{i},{cls}]",
             }
+            field = CLASS_TO_FIELD.get(cls, cls)
+            if cls in self.multi_fields:
+                record.setdefault(field, []).append(item)  # aggregate into a list
+            else:
+                record[field] = item
         record["_solver"] = solver_meta or {
             "backend": "OR-Tools SCIP", "status": "OPTIMAL",
             "objective_value": float(objective) if objective is not None else None,

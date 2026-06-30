@@ -153,8 +153,10 @@ python annotate_memes.py --source mongo                                        #
 ```
 
 **3. Student model** — the SmartScrape GNN+ILP extractor retargeted to memes.
-Trains on the teacher's annotations, then extracts the structured info-box
-fields (title/type/status/origin/year) **without an LLM** — cheap, fast, auditable:
+Trains on the teacher's annotations, then extracts singleton fields
+(title/type/status/origin/year/parent_meme), multi-label fields
+(tags/aliases/region/related_memes), and long-form sections
+(about/origin/spread) **without an LLM** — cheap, fast, auditable:
 
 ```bash
 pip install -r requirements-model.txt && playwright install chromium
@@ -230,10 +232,11 @@ memes_smart_scrape/
 │       │   ├── url_store.py        # file IO, resume, Mongo-ready documents
 │       │   └── config.py           # env-driven, swappable LLM provider
 │       ├── learning/               # student model (meme retarget)
-│       │   ├── meme_config.py      # class space, paths, thresholds
+│       │   ├── meme_config.py      # class space (singleton/multi), paths, thresholds
 │       │   ├── meme_labels.py      # teacher->student label alignment (pure)
 │       │   ├── meme_encoding.py    # meme label space + graph builder
-│       │   ├── meme_pipeline.py    # inference: render->GNN->priors->ILP
+│       │   ├── meme_sections.py    # tier ③ section extractor (about/origin/spread)
+│       │   ├── meme_pipeline.py    # inference: render->GNN->priors->ILP->sections
 │       │   └── kym_render.py       # Playwright DOM -> nodes (proxy-aware)
 │       └── reasoning/
 │           └── meme_solver.py      # spec-driven ILP + greedy fallback

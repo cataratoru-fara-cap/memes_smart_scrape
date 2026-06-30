@@ -19,7 +19,13 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 from typing import Any, Dict, List, Optional, Sequence
+
+
+def _log(msg: str) -> None:
+    """Status messages go to stderr so stdout stays clean JSON for piping."""
+    print(msg, file=sys.stderr)
 
 from .meme_config import MEME_CLASSES, MEME_MODEL_PATH, STABILITY_THRESHOLD, TITLE_ZONE_MAX_PX
 from .meme_encoding import INPUT_DIM
@@ -34,15 +40,24 @@ _TYPE_VOCAB = {
     "photoshop", "remix", "parody", "challenge", "character",
 }
 
+# Small region vocabulary for the (multi-label) region prior.
+_REGION_VOCAB = {
+    "united states", "usa", "united kingdom", "uk", "japan", "south korea",
+    "korea", "china", "brazil", "russia", "germany", "france", "canada",
+    "australia", "india", "mexico", "worldwide", "global", "europe",
+}
+
 
 class MemeExtractionPipeline:
     CLASSES = MEME_CLASSES
 
     def __init__(self, model_path: str = MEME_MODEL_PATH, renderer: Any = None,
-                 use_priors: bool = True, title_zone_max_px: float | None = TITLE_ZONE_MAX_PX):
+                 use_priors: bool = True, use_sections: bool = True,
+                 title_zone_max_px: float | None = TITLE_ZONE_MAX_PX):
         self.model_path = model_path
         self.renderer = renderer
         self.use_priors = use_priors
+        self.use_sections = use_sections
         self.solver = MemeConstraintSolver(title_zone_max_px=title_zone_max_px)
         self._model = None
         self._model_trained = False
@@ -51,7 +66,7 @@ class MemeExtractionPipeline:
     # ------------------------------------------------------------------
     def _load_model(self) -> None:
         if not os.path.exists(self.model_path):
-            print(f"[MemePipeline] No model at '{self.model_path}' — "
+            _log(f"[MemePipeline] No model at '{self.model_path}' — "
                   "running uniform GNN + priors + ILP. Train with train_meme_gnn.py.")
             return
         try:
@@ -62,9 +77,9 @@ class MemeExtractionPipeline:
             model.eval()
             self._model = model
             self._model_trained = True
-            print(f"[MemePipeline] Loaded meme GNN weights from '{self.model_path}'")
+            _log(f"[MemePipeline] Loaded meme GNN weights from '{self.model_path}'")
         except Exception as e:  # noqa: BLE001
-            print(f"[MemePipeline] WARNING: could not load model ({e}) — using uniform scores.")
+            _log(f"[MemePipeline] WARNING: could not load model ({e}) — using uniform scores.")
 
     # ------------------------------------------------------------------
     def run(self, url: Optional[str] = None,
@@ -83,6 +98,10 @@ class MemeExtractionPipeline:
 
         page_height = self._page_height(nodes)
         record = self.solver.solve(nodes, probs, page_height)
+
+        if self.use_sections:
+            from .meme_sections import extract_sections
+            record.update(extract_sections(nodes))  # about / origin_description / spread_description
 
         stability = self._stability(probs)
         record["_meta"] = {
@@ -111,7 +130,7 @@ class MemeExtractionPipeline:
                     logits = self._model(Data(x=feats, edge_index=edge_index))
                     return torch.exp(logits).tolist()
             except Exception as e:  # noqa: BLE001
-                print(f"[MemePipeline] GNN inference failed ({e}) — uniform scores.")
+                _log(f"[MemePipeline] GNN inference failed ({e}) — uniform scores.")
         return [[1.0 / c] * c for _ in nodes]
 
     # ------------------------------------------------------------------
@@ -130,6 +149,8 @@ class MemeExtractionPipeline:
                 probs[i][idx["status"]] += 0.3
             if "type" in idx and self._norm(text) in _TYPE_VOCAB:
                 probs[i][idx["type"]] += 0.3
+            if "region" in idx and short and self._norm(text) in _REGION_VOCAB:
+                probs[i][idx["region"]] += 0.3
             if "title" in idx and tag in ("h1", "h2") and y < 600:
                 probs[i][idx["title"]] += 0.3
 

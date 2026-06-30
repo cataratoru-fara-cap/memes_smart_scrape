@@ -27,6 +27,8 @@ def main(argv=None) -> int:
     p.add_argument("--nodes", help="JSON file of pre-rendered nodes (offline).")
     p.add_argument("--model", default=MEME_MODEL_PATH, help="Trained meme_model.pt path.")
     p.add_argument("--no-priors", action="store_true", help="Disable heuristic priors.")
+    p.add_argument("--no-sections", action="store_true",
+                   help="Disable the about/origin/spread section extractor.")
     args = p.parse_args(argv)
 
     if not args.url and not args.nodes:
@@ -41,7 +43,8 @@ def main(argv=None) -> int:
         renderer = KymRenderer()
 
     pipeline = MemeExtractionPipeline(
-        model_path=args.model, renderer=renderer, use_priors=not args.no_priors,
+        model_path=args.model, renderer=renderer,
+        use_priors=not args.no_priors, use_sections=not args.no_sections,
     )
     record = pipeline.run(url=args.url, nodes=nodes)
     print(json.dumps(record, ensure_ascii=False, indent=2))

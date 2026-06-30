@@ -17,10 +17,24 @@ import os
 
 # Per-node class space. "other" is background. Order is fixed: changing it
 # invalidates a trained meme_model.pt (the GNN's output head is positional).
-MEME_CLASSES = ["title", "type", "status", "origin", "year", "other"]
+#
+#   singletons  (≤1 node each, ILP uniqueness)  : title type status origin year parent_meme
+#   multi-label (0..N nodes each, no uniqueness) : tag alias region related
+#   background                                   : other
+SINGLETON_FIELDS = ["title", "type", "status", "origin", "year", "parent_meme"]
+MULTI_FIELDS = ["tag", "alias", "region", "related"]
+MEME_CLASSES = SINGLETON_FIELDS + MULTI_FIELDS + ["other"]
 
-# Fields the GNN+ILP actually selects (everything except background).
-SINGLETON_FIELDS = ["title", "type", "status", "origin", "year"]
+# Map a per-node class to the key it gets in the served record. Singletons map
+# to a single object; multi classes aggregate into a list (plural/schema name).
+CLASS_TO_FIELD = {
+    "title": "title", "type": "type", "status": "status", "origin": "origin",
+    "year": "year", "parent_meme": "parent_meme",
+    "tag": "tags", "alias": "aliases", "region": "region", "related": "related_memes",
+}
+
+# Long-form sections recovered heuristically (tier ③), not by the GNN.
+SECTION_FIELDS = ["about", "origin_description", "spread_description"]
 
 # Valid Know Your Meme moderation statuses (lowercased, for the format rule).
 STATUS_VALUES = {"confirmed", "submission", "deadpool", "researching"}

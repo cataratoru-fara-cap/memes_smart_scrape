@@ -17,13 +17,31 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List
 
-from .meme_config import SINGLETON_FIELDS
-
 _WS = re.compile(r"\s+")
 _YEAR = re.compile(r"(?:18|19|20)\d{2}")
 
 # Minimum match score for a value to be aligned to a node at all.
 MIN_MATCH = 0.45
+
+# Singleton class -> how to read its value from a `meme` payload.
+_SINGLETON_SRC = {
+    "title": lambda p: p.get("title"),
+    "type": lambda p: (p.get("entry_type") or [None])[0]
+    if isinstance(p.get("entry_type"), list) else p.get("entry_type"),
+    "status": lambda p: p.get("status"),
+    "origin": lambda p: p.get("origin"),
+    "year": lambda p: None if str(p.get("year")) in ("0", "None", "", "None")
+    else p.get("year"),
+    "parent_meme": lambda p: p.get("parent_meme"),
+}
+
+# Multi-label class -> the list field it reads from a `meme` payload.
+_MULTI_SRC = {
+    "tag": "tags",
+    "alias": "aliases",
+    "region": "region",
+    "related": "related_memes",
+}
 
 
 def normalize_text(s: Any) -> str:
@@ -37,36 +55,38 @@ def normalize_text(s: Any) -> str:
 
 def localizable_field_values(meme_payload: Dict[str, Any]) -> Dict[str, str]:
     """
-    Map a ``meme`` payload (entry schema) to {field: value_string} for the
-    student's singleton fields. Missing/empty values are omitted.
+    Map a ``meme`` payload (entry schema) to {singleton_class: value_string}.
+    Missing/empty values are omitted.
     """
     if not isinstance(meme_payload, dict):
         return {}
     out: Dict[str, str] = {}
+    for cls, getter in _SINGLETON_SRC.items():
+        val = getter(meme_payload)
+        if val not in (None, "", 0):
+            out[cls] = str(val)
+    return out
 
-    title = meme_payload.get("title")
-    if title:
-        out["title"] = str(title)
 
-    entry_type = meme_payload.get("entry_type")
-    if isinstance(entry_type, list) and entry_type:
-        out["type"] = str(entry_type[0])
-    elif isinstance(entry_type, str) and entry_type.strip():
-        out["type"] = entry_type
-
-    status = meme_payload.get("status")
-    if status:
-        out["status"] = str(status)
-
-    origin = meme_payload.get("origin")
-    if origin:
-        out["origin"] = str(origin)
-
-    year = meme_payload.get("year")
-    if year and str(year) not in ("0", "None", ""):
-        out["year"] = str(year)
-
-    return {f: v for f, v in out.items() if f in SINGLETON_FIELDS}
+def multi_field_values(meme_payload: Dict[str, Any]) -> Dict[str, List[str]]:
+    """
+    Map a ``meme`` payload to {multi_class: [value_strings]} for the multi-label
+    fields (tags/aliases/region/related_memes). Empty lists are omitted.
+    """
+    if not isinstance(meme_payload, dict):
+        return {}
+    out: Dict[str, List[str]] = {}
+    for cls, field in _MULTI_SRC.items():
+        raw = meme_payload.get(field)
+        if isinstance(raw, list):
+            vals = [str(v).strip() for v in raw if str(v).strip()]
+        elif isinstance(raw, str) and raw.strip():
+            vals = [raw.strip()]
+        else:
+            vals = []
+        if vals:
+            out[cls] = vals
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -104,36 +124,59 @@ def match_score(node_text: str, value: str, field: str) -> float:
 
 
 def align_nodes_to_labels(
-    nodes: List[Dict[str, Any]], field_values: Dict[str, str]
+    nodes: List[Dict[str, Any]],
+    singleton_values: Dict[str, str],
+    multi_values: Dict[str, List[str]] | None = None,
 ) -> List[Dict[str, Any]]:
     """
-    Return a copy of ``nodes`` with a ``label`` on each (one of the student
-    classes, default "other").
+    Return a copy of ``nodes`` with a ``label`` on each (a student class,
+    default "other").
 
-    Greedy global assignment: take the highest-scoring (field, node) pairs
-    first, enforcing at most one node per field and one field per node, so each
-    value lands on its best free node.
+    Greedy global assignment over all (class, value, node) candidates, highest
+    score first, with these capacities:
+      * each node is labelled at most once;
+      * a singleton class is used at most once (one node per field);
+      * a multi class may label many nodes, but each distinct *value* lands on
+        one node (so a 3-tag page gets up to 3 'tag' nodes).
     """
+    multi_values = multi_values or {}
     labeled = [dict(n) for n in nodes]
     for n in labeled:
         n.setdefault("label", "other")
 
+    # (score, class, value_key, node_idx, is_singleton)
     candidates = []
-    for field, value in field_values.items():
+    for cls, value in singleton_values.items():
         for idx, node in enumerate(labeled):
-            s = match_score(node.get("text", ""), value, field)
+            s = match_score(node.get("text", ""), value, cls)
             if s >= MIN_MATCH:
-                candidates.append((s, field, idx))
+                candidates.append((s, cls, None, idx, True))
+    for cls, values in multi_values.items():
+        for value in values:
+            vkey = normalize_text(value)
+            for idx, node in enumerate(labeled):
+                s = match_score(node.get("text", ""), value, cls)
+                if s >= MIN_MATCH:
+                    candidates.append((s, cls, vkey, idx, False))
 
     candidates.sort(key=lambda c: c[0], reverse=True)
 
-    used_fields: set[str] = set()
+    used_singletons: set[str] = set()
+    used_multi_values: set[tuple] = set()
     used_nodes: set[int] = set()
-    for score, field, idx in candidates:
-        if field in used_fields or idx in used_nodes:
+    for score, cls, vkey, idx, is_singleton in candidates:
+        if idx in used_nodes:
             continue
-        labeled[idx]["label"] = field
-        used_fields.add(field)
+        if is_singleton:
+            if cls in used_singletons:
+                continue
+            used_singletons.add(cls)
+        else:
+            pair = (cls, vkey)
+            if pair in used_multi_values:
+                continue
+            used_multi_values.add(pair)
+        labeled[idx]["label"] = cls
         used_nodes.add(idx)
 
     return labeled
@@ -142,5 +185,9 @@ def align_nodes_to_labels(
 def label_page(
     nodes: List[Dict[str, Any]], meme_payload: Dict[str, Any]
 ) -> List[Dict[str, Any]]:
-    """Convenience: extract values from a payload and label the nodes."""
-    return align_nodes_to_labels(nodes, localizable_field_values(meme_payload))
+    """Convenience: extract singleton + multi values from a payload and label."""
+    return align_nodes_to_labels(
+        nodes,
+        localizable_field_values(meme_payload),
+        multi_field_values(meme_payload),
+    )

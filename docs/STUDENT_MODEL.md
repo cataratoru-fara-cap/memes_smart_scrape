@@ -20,20 +20,46 @@ build_meme_dataset.py ──▶ labeled_memes.json ──▶ train_meme_gnn.py �
 
 ## What it extracts
 
-Per-node classification over the **node-localizable info-box fields** plus
-background:
+The student covers three tiers of fields, by how each maps onto the page:
+
+**① Singletons — one node each (GNN class + ILP uniqueness):**
 
 ```
-title · type · status · origin · year · other
+title · type · status · origin · year · parent_meme
 ```
 
-Long-form sections (about / origin / spread descriptions) are *not* student
-targets — they stay the teacher's job. The student handles exactly the fields
-that map to a single page node, which is what the GNN+ILP design does well.
+**② Multi-label — many nodes each (GNN class, no uniqueness):**
+
+```
+tag → tags · alias → aliases · region · related → related_memes
+```
+
+Each node the GNN tags with a multi class becomes one item; the served record
+aggregates them into a list (e.g. all `tag` nodes → `tags: [...]`).
+
+**③ Sections — long-form prose (heuristic, no GNN/LLM):**
+
+```
+about · origin_description · spread_description
+```
+
+These are whole sections (a run of paragraphs under a heading), so a separate
+heading-anchored extractor recovers them — see `src/learning/meme_sections.py`.
+
+The per-node class space is therefore:
+
+```
+title type status origin year parent_meme   (singletons)
+tag alias region related                     (multi-label)
+other                                        (background)
+```
+
+Still teacher-only (not node-localizable): `search_interest`, `notable_examples`,
+`external_references`, `nsfw`.
 
 The same `SmartScrapeGNN` architecture (2-layer GCN, `src/learning/gnn_model.py`)
-and the same feature/edge encoder (`src/learning/encoding.py`) are reused — only
-the class space and the constraints change.
+and feature/edge encoder (`src/learning/encoding.py`) are reused — only the class
+space and the constraints change.
 
 ---
 
@@ -44,7 +70,7 @@ Maximise the GNN's per-node scores subject to:
 | Constraint | Rule |
 |---|---|
 | **Integrity** | each node gets exactly one class |
-| **Uniqueness** | ≤ 1 node per field (title/type/status/origin/year) |
+| **Uniqueness** | ≤ 1 node per **singleton** field (title/type/status/origin/year/parent_meme); multi-label fields have no cap |
 | **Format — year** | a node can be `year` only if its text contains a 4-digit year |
 | **Format — status** | a node can be `status` only if its text is a KYM status word (`confirmed`/`submission`/`deadpool`/`researching`) |
 | **Title zone** *(optional)* | title must sit above `MEME_TITLE_ZONE_MAX_PX` |
@@ -59,12 +85,13 @@ packages, so the solver works (degraded) even before you install OR-Tools.
 
 Hand-labeling 40k pages is infeasible, so labels are generated automatically:
 
-1. `localizable_field_values()` pulls `{title, type, status, origin, year}` from
-   an annotation's `meme` payload.
-2. `align_nodes_to_labels()` renders the page to DOM nodes and assigns each value
-   to its single best-matching node (exact / tight-containment / token overlap;
-   `year` matches on the 4-digit value). A greedy global assignment guarantees
-   one node per field.
+1. `localizable_field_values()` pulls the singleton values and
+   `multi_field_values()` pulls the list fields (tags/aliases/region/related)
+   from an annotation's `meme` payload.
+2. `align_nodes_to_labels()` assigns each value to its best-matching node (exact
+   / tight-containment / token overlap; `year` matches on the 4-digit value).
+   A greedy global assignment caps singletons at one node each, while a multi
+   class may claim several nodes (one per distinct value).
 
 This is weak supervision / distillation — the meme analogue of the hand-labeled
 books pages.
@@ -138,10 +165,11 @@ python -m unittest tests.test_meme_student -v
 
 | Path | Role |
 |---|---|
-| `src/learning/meme_config.py` | class space, paths, thresholds |
-| `src/learning/meme_labels.py` | value extraction + node alignment (pure) |
+| `src/learning/meme_config.py` | class space (singleton/multi), paths, thresholds |
+| `src/learning/meme_labels.py` | singleton + multi value extraction & node alignment (pure) |
 | `src/learning/meme_encoding.py` | meme label space + graph builder |
+| `src/learning/meme_sections.py` | tier ③ heading-anchored section extractor (pure) |
 | `src/learning/kym_render.py` | Playwright DOM → nodes (proxy-aware) |
-| `src/learning/meme_pipeline.py` | inference pipeline (render→GNN→priors→ILP) |
-| `src/reasoning/meme_solver.py` | spec-driven ILP + greedy fallback |
+| `src/learning/meme_pipeline.py` | inference pipeline (render→GNN→priors→ILP→sections) |
+| `src/reasoning/meme_solver.py` | spec-driven ILP (singleton uniqueness + multi) + greedy fallback |
 | `build_meme_dataset.py` · `train_meme_gnn.py` · `infer_meme.py` | CLIs |
