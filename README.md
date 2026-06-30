@@ -1,4 +1,4 @@
-# 🕸️ SmartScrape
+# 🕸️ MemeSmartScrape
 
 **A Neuro-Symbolic Framework for Web Information Extraction**
 
@@ -7,7 +7,7 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x-orange.svg)](https://pytorch.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-SmartScrape combines a **Graph Neural Network (GNN)** for node scoring with an **Integer Linear Programming (ILP)** constraint solver to extract structured information from web pages — reliably, auditably, and without breaking when page templates change.
+MemeSmartScrape is a fork of SmartScrape that combines a **Graph Neural Network (GNN)** for node scoring with an **Integer Linear Programming (ILP)** constraint solver to extract structured information from meme pages from knowyourmeme.com — reliably, auditably, and without breaking when page templates change.
 
 ### Two parts
 
