@@ -77,7 +77,13 @@ class ScrapeGraphAnnotator:
         if not isinstance(result, dict):
             result = {}
 
-        return meme_schema.normalize(result, template_type)
+        result = meme_schema.normalize(result, template_type)
+        if not result.get("title"):
+            raise RuntimeError(
+                "Annotation extracted no title — page is likely blocked or returned a "
+                "non-content response (IP ban?). Set ANNOTATION_PROXY_URL in .env."
+            )
+        return result
 
 
 # --------------------------------------------------------------------------
