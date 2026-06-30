@@ -108,7 +108,7 @@ import json, pathlib
 for line in pathlib.Path('data/annotations_sample.jsonl').read_text().splitlines():
     doc = json.loads(line)
     print(doc['page_template_type'], doc['url'])
-    inner = doc.get(doc['page_template_type']) or {}
+    inner = doc.get('meme') or {}
     print('  title:', inner.get('title'))
     print('  tags: ', inner.get('tags'))
     print()
@@ -221,6 +221,15 @@ which cuts the corpus by roughly a third.
 ---
 
 ## Common issues
+
+**IP banned by KYM (`fail=N` with "IP ban?" in the error)**
+Set a proxy in `.env`:
+```bash
+ANNOTATION_PROXY_URL=http://host:port
+# ANNOTATION_PROXY_USERNAME=user   # if the proxy requires auth
+# ANNOTATION_PROXY_PASSWORD=pass
+```
+The pipeline passes these directly to Playwright via ScrapeGraph-AI's `loader_kwargs`. Without a proxy, a banned IP will cause every page to return the ban HTML and the annotator will raise `"Annotation extracted no title — page is likely blocked … (IP ban?)"`.
 
 **`RuntimeError: scrapegraphai is not installed`**
 Run `pip install -r requirements-annotation.txt` and `playwright install chromium`.
