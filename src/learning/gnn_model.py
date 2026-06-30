@@ -6,20 +6,20 @@ from torch_geometric.nn import GCNConv
 
 class SmartScrapeGNN(nn.Module):
     """
-    Graph Neural Network for Web Information Extraction.
-    Architecture: 2-layer GCN + Softmax Classifier.
+    Graph Neural Network for web information extraction (node classifier).
+    Architecture: 2-layer GCN + linear head + log-softmax.
 
-    ВАЖНО: архитектура должна точно совпадать с train_gnn.py:
-      conv1: input_dim → 64
-      conv2: 64 → 32
-      fc:    32 → num_classes
+    The architecture must match between training and inference:
+      conv1: input_dim  -> hidden_dim
+      conv2: hidden_dim -> hidden_dim // 2
+      fc:    hidden_dim // 2 -> num_classes
     """
 
     def __init__(self, input_dim: int, hidden_dim: int = 64, num_classes: int = 3):
         super().__init__()
-        self.conv1 = GCNConv(input_dim, hidden_dim)       # 147 → 64
-        self.conv2 = GCNConv(hidden_dim, hidden_dim // 2) # 64  → 32
-        self.fc    = nn.Linear(hidden_dim // 2, num_classes)  # 32 → 3
+        self.conv1 = GCNConv(input_dim, hidden_dim)
+        self.conv2 = GCNConv(hidden_dim, hidden_dim // 2)
+        self.fc    = nn.Linear(hidden_dim // 2, num_classes)
 
     def forward(self, data):
         x, edge_index = data.x, data.edge_index

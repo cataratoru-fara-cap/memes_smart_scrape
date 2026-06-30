@@ -269,4 +269,5 @@ and drop `ANNOTATION_CONCURRENCY` to `2`.
 |---|---|
 | [DISCOVERY.md](DISCOVERY.md) | `kym_discover.py` internals, flags, what was fixed |
 | [MEME_ANNOTATION.md](MEME_ANNOTATION.md) | Schema details, output format, teacher→student strategy |
+| [STUDENT_MODEL.md](STUDENT_MODEL.md) | GNN+ILP student: dataset build, training, inference |
 | [../.env](../.env) | All tuneable settings with inline comments |

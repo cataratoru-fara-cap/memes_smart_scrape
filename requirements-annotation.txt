@@ -1,5 +1,5 @@
 # Meme annotation pipeline (ScrapeGraph-AI based).
-# Install on top of requirements.txt:  pip install -r requirements-annotation.txt
+# Install:  pip install -r requirements-annotation.txt
 # ScrapeGraph-AI renders pages with Playwright; after install run:
 #     playwright install chromium
 

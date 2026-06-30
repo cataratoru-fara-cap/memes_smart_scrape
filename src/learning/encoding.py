@@ -1,19 +1,14 @@
 """
-Shared node-encoding and graph-construction primitives.
+Shared node-encoding and graph-construction primitives for the GNN.
 
-SINGLE SOURCE OF TRUTH used by BOTH:
-  * training  (train_gnn.py)
-  * inference (graph_builder.py / pipeline)
-
-Keeping feature order, visual normalization, and edge construction in one
-place guarantees that the graph seen at inference is identical in
-construction to the graph the GNN was trained on. Previously the trainer
-used 1-D y-distance KNN (bidirectional, no containment) while the runtime
-used 2-D Euclidean KNN (unidirectional) + containment, which is a
-train/inference skew. This module removes that skew.
+Single source of truth used by both training (train_meme_gnn.py, via
+meme_encoding) and inference (meme_pipeline), so the graph seen at inference is
+constructed identically to the one the GNN trained on: same feature order, same
+visual normalization, same edge builder. The meme label space lives in
+``meme_encoding``; this module is label-agnostic.
 
 Feature layout (146 dims):
-  text(128 char-ngram hash)  +  visual(4 normalized bbox)  +  tag(14 one-hot)
+  text(128 char-ngram hash) + visual(4 normalized bbox) + tag(14 one-hot)
 """
 
 import math
@@ -36,10 +31,6 @@ INPUT_DIM = TEXT_DIM + VISUAL_DIM + TAG_DIM   # 146
 # dataset's coordinate space (~1200 px wide, up to ~2400 px tall).
 PAGE_W = 1200.0
 PAGE_H = 2400.0
-
-# Label space. Dataset uses 'none' for background; map it to class 2.
-LABEL_MAP = {"price": 0, "title": 1, "other": 2, "none": 2}
-CLASSES = ["price", "title", "other"]
 
 
 # ── Feature encoders ────────────────────────────────────────────────────
@@ -143,13 +134,3 @@ def build_edges(raw_nodes, k: int = 3) -> torch.Tensor:
     if not edges:
         return torch.tensor([[0], [0]], dtype=torch.long)
     return torch.tensor(sorted(edges), dtype=torch.long).t().contiguous()
-
-
-def page_to_graph(nodes):
-    """Build (Data, labels) for a labeled page. Used by the trainer."""
-    from torch_geometric.data import Data
-    feats = torch.stack([node_features(nd) for nd in nodes])
-    labels = torch.tensor([LABEL_MAP.get(nd.get("label"), 2) for nd in nodes],
-                          dtype=torch.long)
-    edge_index = build_edges(nodes, k=3)
-    return Data(x=feats, edge_index=edge_index), labels

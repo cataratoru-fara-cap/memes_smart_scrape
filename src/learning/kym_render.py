@@ -1,10 +1,10 @@
 """
 Render a Know Your Meme page to a flat list of DOM nodes for the student model.
 
-Each node is ``{id, text, tag, bbox:[x,y,w,h]}`` — the same shape the books
-pipeline got from FitLayout, so it feeds straight into ``encoding`` /
-``meme_encoding``. Playwright is imported lazily; this module imports fine
-without it (the dataset builder / live inference need it, tests do not).
+Each node is ``{id, text, tag, bbox:[x,y,w,h]}``, which feeds straight into
+``encoding`` / ``meme_encoding``. Playwright is imported lazily; this module
+imports fine without it (the dataset builder / live inference need it, tests do
+not).
 
 Proxy support mirrors the annotation pipeline: set ANNOTATION_PROXY_URL (and
 optionally ANNOTATION_PROXY_USERNAME / ANNOTATION_PROXY_PASSWORD) when the

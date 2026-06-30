@@ -4,7 +4,6 @@ Meme extraction pipeline — the student model at inference time.
     URL ──(render)──▶ nodes ──(GNN)──▶ per-node scores ──(priors)──▶
         ──(ILP solver)──▶ proof-carrying meme record + σ(P) drift
 
-Mirrors ``src/pipeline_fixed.SmartScrapePipeline`` but for the meme field set.
 Everything heavy is lazy:
 
   * No torch / no trained model  -> uniform GNN scores; heuristic priors + the

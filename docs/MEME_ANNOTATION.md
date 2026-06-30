@@ -1,8 +1,8 @@
 # 🧬 Meme Dataset Annotation (ScrapeGraph-AI)
 
-This document describes how SmartScrape's strategy is retargeted from
-books.toscrape.com (title/price) to **knowyourmeme.com** (rich meme data),
-and how the **ScrapeGraph-AI** annotation pipeline produces the training corpus.
+This document describes how the **ScrapeGraph-AI** annotation pipeline turns
+Know Your Meme URLs into information-rich records — the training corpus for the
+GNN+ILP student.
 
 ---
 
@@ -161,17 +161,18 @@ duplicating.
 
 ---
 
-## Next step: training the student model
+## Next step: the student model
 
-Once `annotations.jsonl` exists, the SmartScrape GNN+ILP stack is retargeted by:
+Once `annotations.jsonl` (or the MongoDB `annotations` collection) exists, the
+GNN+ILP **student** distills these labels into a cheap, LLM-free extractor:
 
-1. Replacing the `["price", "title", "other"]` field set with the meme schema
-   fields as extraction targets.
-2. Aligning rendered page nodes (FitLayout / Playwright DOM) to the LLM-extracted
-   values to produce per-node labels — the analogue of `data/labeled_2.json`.
-3. Reusing `train_gnn.py` / `src/learning/*` to train, and `src/reasoning/*`
-   (ILP) to enforce meme-specific constraints (e.g. exactly one `title`, `year`
-   must be a 4-digit number, `status ∈ {Confirmed, Submission, Deadpool}`).
+```bash
+python build_meme_dataset.py --annotations data/annotations.jsonl   # render + align -> labels
+python train_meme_gnn.py                                            # -> meme_model.pt
+python infer_meme.py --url https://knowyourmeme.com/memes/doge      # proof-carrying record
+```
 
-That stage is intentionally **not** built yet — it depends on this annotated
-corpus existing first.
+It renders each annotated page to DOM nodes, aligns the extracted values onto
+those nodes (weak supervision), trains the GNN, and enforces meme constraints in
+the ILP (e.g. one `title`, `year` is a 4-digit number, `status` is a valid KYM
+status). Full details in **[STUDENT_MODEL.md](STUDENT_MODEL.md)**.

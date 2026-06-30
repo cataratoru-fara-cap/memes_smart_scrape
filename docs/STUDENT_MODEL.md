@@ -1,9 +1,10 @@
 # 🎓 Meme GNN+ILP Student Model
 
-The **student** is SmartScrape's neuro-symbolic extractor retargeted from
-books.toscrape.com (title/price) to Know Your Meme. It learns from the
-**teacher** (ScrapeGraph-AI annotations) so that, once trained, it extracts the
-structured info-box fields **without an LLM** — cheaply, fast, and auditably.
+The **student** is a neuro-symbolic extractor (GNN node scoring + ILP
+constraints, following the SmartScrape approach) for Know Your Meme. It learns
+from the **teacher** (ScrapeGraph-AI annotations) so that, once trained, it
+extracts the structured info-box fields **without an LLM** — cheaply, fast, and
+auditably.
 
 ```
 annotations (teacher)                       trained student

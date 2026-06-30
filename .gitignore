@@ -8,14 +8,12 @@ __pycache__/
 .venv/
 venv/
 
-# Model checkpoints
+# Model checkpoints (e.g. meme_model.pt)
 *.pt
 *.pth
 *.ckpt
 
 # Runtime data
-src/learning/drift_history.json
-src/learning/active_learning_queries.json
 *.log
 
 # Annotation pipeline output (keep the *.sample.json inputs, ignore generated)
