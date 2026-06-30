@@ -9,6 +9,25 @@
 
 SmartScrape combines a **Graph Neural Network (GNN)** for node scoring with an **Integer Linear Programming (ILP)** constraint solver to extract structured information from web pages — reliably, auditably, and without breaking when page templates change.
 
+### Two parts
+
+This repo holds two complementary halves:
+
+1. **Neuro-symbolic extractor demo** (GNN + ILP) — the original SmartScrape,
+   extracting `title`/`price` from books.toscrape.com. See the sections below.
+2. **Know Your Meme data pipeline** — discovers ~40k meme URLs, annotates them
+   into information-rich records with [ScrapeGraph-AI](https://github.com/ScrapeGraphAI/Scrapegraph-ai),
+   and stores them in MongoDB as the training corpus the GNN+ILP model
+   (retargeted from books to memes) will learn from.
+
+```
+kym_discover.py ──▶ urls (JSON / MongoDB) ──▶ annotate_memes.py ──▶ annotations ──▶ (GNN + ILP model)
+  sitemaps +           discovery index          ScrapeGraph-AI + LLM    rich meme        future
+  listing crawl                                 (information-rich)       records          retarget
+```
+
+Pipeline guides: **[docs/DISCOVERY.md](docs/DISCOVERY.md)** · **[docs/MEME_ANNOTATION.md](docs/MEME_ANNOTATION.md)**.
+
 ---
 
 ## ✨ Key Features
@@ -169,31 +188,54 @@ The header will show **Model trained: True** when the model is loaded correctly.
 ## 📁 Project Structure
 
 ```
-smartscrape/
-├── app.py                      # Main Streamlit demo application
-├── annotate.py                 # Data annotation tool
-├── train_gnn.py                # GNN training script
-├── config.py                   # Configuration (reads from .env)
-├── model.pt                    # Trained GNN weights (not in repo)
-├── data/
-│   └── labeled.json            # Annotated training data
-└── src/
-    ├── pipeline_fixed.py       # Main extraction pipeline
-    ├── integration/
-    │   └── fitlayout.py        # FitLayout API client
-    ├── learning/
-    │   ├── gnn_model.py        # GCN architecture
-    │   ├── features.py         # Node feature encoder
-    │   ├── graph_builder.py    # Graph construction (KNN edges)
-    │   └── drift_monitor.py    # σ(P) stability metric
-    └── reasoning/
-        ├── solver_fixed.py     # ILP constraint solver (OR-Tools)
-        └── engine.py           # Greedy inference (ablation baseline)
+memes_smart_scrape/
+│
+├── Meme data pipeline ─────────────────────────────────────────────
+│   ├── kym_discover.py             # Phase A: discover KYM URLs (sitemaps + crawl)
+│   ├── annotate_memes.py           # Phase B: annotate URLs -> rich records (CLI)
+│   ├── requirements-discovery.txt  # deps for discovery (requests, bs4, lxml, pymongo)
+│   ├── requirements-annotation.txt # deps for annotation (scrapegraphai, pydantic, pymongo)
+│   ├── docs/
+│   │   ├── DISCOVERY.md            # discovery guide
+│   │   └── MEME_ANNOTATION.md      # annotation guide
+│   ├── data/
+│   │   └── meme_urls.sample.json   # sample discovery records (for --mock)
+│   └── src/
+│       ├── db/                     # MongoDB hub shared by both phases
+│       │   ├── store.py            # pure merge logic + InMemoryStore (dep-free)
+│       │   └── mongo.py            # pymongo MongoStore (urls + annotations)
+│       └── annotation/
+│           ├── meme_schema.py      # extracted fields (entry vs editorial)
+│           ├── annotator.py        # ScrapeGraph-AI wrapper + MockAnnotator
+│           ├── url_store.py        # file IO, resume, Mongo-ready documents
+│           └── config.py           # env-driven, swappable LLM provider
+│
+├── Books demo (original SmartScrape) ──────────────────────────────
+│   ├── app.py                      # Streamlit demo application
+│   ├── annotate.py                 # Streamlit labeling UI
+│   ├── train_gnn.py                # GNN training script
+│   ├── config.py                   # FitLayout / GNN configuration
+│   ├── model.pt                    # trained GNN weights (not in repo)
+│   ├── data/labeled_2.json         # annotated training pages
+│   └── src/
+│       ├── pipeline_fixed.py       # main extraction pipeline
+│       ├── integration/fitlayout.py# FitLayout API client
+│       ├── learning/               # gnn_model, features, graph_builder, drift_monitor
+│       └── reasoning/              # solver_fixed (ILP), engine (greedy baseline)
+│
+└── tests/                          # offline test suite (unittest)
+    ├── test_discovery.py           # URL classification, sitemap, taxonomy
+    ├── test_db_store.py            # storage layer + discovery->annotation flow
+    └── test_meme_annotation.py     # schema, resume, mock pipeline
 ```
 
 ---
 
 ## 🔧 Configuration
+
+All variables live in `.env` (copy from `.env.example`).
+
+**Books demo (GNN + ILP)**
 
 | Variable | Default | Description |
 |---|---|---|
@@ -202,6 +244,26 @@ smartscrape/
 | `SMARTSCRAPE_MODEL_PATH` | `model.pt` | Path to trained GNN weights |
 | `FOOTER_THRESHOLD` | `0.80` | Footer zone cutoff (fraction of page height) |
 | `STABILITY_THRESHOLD` | `0.60` | σ(P) threshold for drift detection |
+
+**Meme annotation pipeline**
+
+| Variable | Default | Description |
+|---|---|---|
+| `ANNOTATION_LLM_PROVIDER` | `openai` | LLM provider: `openai` \| `anthropic` \| `google` \| `ollama` |
+| `ANNOTATION_LLM_MODEL` | `gpt-4o-mini` | LLM model name |
+| `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY`) | — | Key for the chosen provider |
+| `ANNOTATION_SOURCE` | `file` | Where URLs come from: `file` \| `mongo` |
+| `ANNOTATION_INPUT_PATH` | `data/meme_urls.sample.json` | Input records (file source) |
+| `ANNOTATION_OUTPUT_PATH` | `data/annotations.jsonl` | Output JSONL (file source) |
+| `ANNOTATION_CONCURRENCY` | `4` | Parallel annotation workers |
+| `ANNOTATION_ONLY_CONFIRMED` | `true` | Only annotate `Confirmed` records |
+
+**MongoDB hub**
+
+| Variable | Default | Description |
+|---|---|---|
+| `MONGODB_URI` | `mongodb://localhost:27017` | MongoDB connection string |
+| `MONGODB_DB` | `memes` | Database holding `urls` + `annotations` collections |
 
 ---
 
@@ -227,6 +289,25 @@ The ILP solver enforces:
 Γ3 PRODUCT ZONE:  y(n) > 500px           ⇒  x[n, Title] = x[n, Price] = 0
 Γ4 FORMAT:        x[n, Price] = 1        ⇒  HasCurrency(n) ∧ IsNumeric(n)
 ```
+
+---
+
+## 🧪 Testing
+
+The meme pipeline ships with an offline test suite — no API key, network, or
+running MongoDB required:
+
+```bash
+python -m unittest discover -s tests -p "test_*.py"
+```
+
+- `tests/test_discovery.py` — URL classification, sitemap parsing, taxonomy inference.
+- `tests/test_db_store.py` — storage layer + the discovery → annotation flow (via `InMemoryStore`).
+- `tests/test_meme_annotation.py` — schema normalisation, resume logic, end-to-end mock run.
+
+A few HTML-parsing tests auto-skip when `beautifulsoup4` isn't installed. The
+annotation CLI also has a `--mock` mode (`python annotate_memes.py --mock --limit 5`)
+that exercises the full pipeline with a network-free fake annotator.
 
 ---
 

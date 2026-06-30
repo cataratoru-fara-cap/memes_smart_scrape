@@ -53,6 +53,11 @@ The previous version under-collected for three reasons, all addressed here:
 `True`, and the crawl can add non-confirmed ones without ever downgrading them
 (`src/db/store.merge_discovery`).
 
+`lastmod` follows from this: **only confirmed entries carry a `lastmod`;
+non-confirmed entries are forced to `null`.** The invariant is applied in both
+`make_record` (JSON output) and `merge_discovery` (the stored/Mongo doc), so a
+stray `lastmod` on a non-confirmed entry is dropped on write.
+
 ---
 
 ## Usage
