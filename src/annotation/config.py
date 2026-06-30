@@ -50,6 +50,11 @@ class AnnotationConfig:
     input_path: str = field(default_factory=lambda: os.getenv("ANNOTATION_INPUT_PATH", "data/meme_urls.sample.json"))
     output_path: str = field(default_factory=lambda: os.getenv("ANNOTATION_OUTPUT_PATH", "data/annotations.jsonl"))
 
+    # --- Proxy (required when your IP is banned by the target site) ---
+    proxy_url: str | None = field(default_factory=lambda: os.getenv("ANNOTATION_PROXY_URL") or None)
+    proxy_username: str | None = field(default_factory=lambda: os.getenv("ANNOTATION_PROXY_USERNAME") or None)
+    proxy_password: str | None = field(default_factory=lambda: os.getenv("ANNOTATION_PROXY_PASSWORD") or None)
+
     # --- Run control ---
     concurrency: int = field(default_factory=lambda: int(os.getenv("ANNOTATION_CONCURRENCY", "4")))
     max_retries: int = field(default_factory=lambda: int(os.getenv("ANNOTATION_MAX_RETRIES", "3")))
@@ -82,8 +87,16 @@ class AnnotationConfig:
             llm["api_key"] = self.api_key
         if self.base_url:
             llm["base_url"] = self.base_url
-        return {
+        cfg: dict = {
             "llm": llm,
             "headless": self.headless,
             "verbose": False,
         }
+        if self.proxy_url:
+            proxy: dict = {"server": self.proxy_url}
+            if self.proxy_username:
+                proxy["username"] = self.proxy_username
+            if self.proxy_password:
+                proxy["password"] = self.proxy_password
+            cfg["loader_kwargs"] = {"proxy": proxy}
+        return cfg
