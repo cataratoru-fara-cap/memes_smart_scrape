@@ -6,7 +6,7 @@ records (one per Know Your Meme URL) plus an ``annotations`` collection holding
 the extracted, MongoDB-ready documents:
 
     discovery  --upsert-->  urls  --ingest-->  annotation  --write-->  annotations
-                                                       \--mark last_scraped--/
+                                                       `--mark last_scraped--`
 
 This module defines:
   * pure helpers (``url_doc_id``, ``merge_discovery``) with no I/O,
