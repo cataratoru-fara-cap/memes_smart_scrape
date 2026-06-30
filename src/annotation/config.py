@@ -62,6 +62,10 @@ class AnnotationConfig:
     rate_limit_per_min: int = field(default_factory=lambda: int(os.getenv("ANNOTATION_RATE_LIMIT_PER_MIN", "0")))  # 0 = unlimited
     headless: bool = field(default_factory=lambda: _get_bool("ANNOTATION_HEADLESS", True))
     only_confirmed: bool = field(default_factory=lambda: _get_bool("ANNOTATION_ONLY_CONFIRMED", True))
+    # Pass a JSON schema to the LLM (function-calling / json_schema). Hosted
+    # OpenAI supports this; many self-hosted/Ollama models behind a gateway do
+    # not — set false to rely on the prompt's "output JSON only" + normalize().
+    structured_output: bool = field(default_factory=lambda: _get_bool("ANNOTATION_STRUCTURED_OUTPUT", True))
 
     def __post_init__(self) -> None:
         key_env = _PROVIDER_KEY_ENV.get(self.provider, "")

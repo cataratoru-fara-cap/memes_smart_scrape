@@ -52,7 +52,13 @@ class ScrapeGraphAnnotator:
 
     def annotate(self, url: str, template_type: str) -> Dict[str, Any]:
         prompt = meme_schema.build_prompt(template_type)
-        schema = meme_schema.build_pydantic_schema(template_type)
+        # Some self-hosted/Ollama models behind an OpenAI-compatible gateway can't
+        # do json-schema/function-calling; ANNOTATION_STRUCTURED_OUTPUT=false skips
+        # the schema and relies on the prompt's "JSON only" + normalize().
+        schema = (
+            meme_schema.build_pydantic_schema(template_type)
+            if self.config.structured_output else None
+        )
 
         kwargs: Dict[str, Any] = {
             "prompt": prompt,

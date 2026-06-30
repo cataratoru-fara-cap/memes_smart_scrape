@@ -103,6 +103,29 @@ python annotate_memes.py --provider anthropic --model claude-haiku-4-5
 python annotate_memes.py --provider ollama   --model llama3        # local, free
 ```
 
+### Self-hosted OpenAI-compatible gateway (Open WebUI / Ollama)
+
+Point the `openai` provider at any OpenAI-compatible endpoint via `base_url`.
+The pipeline calls `POST {base_url}/chat/completions` with
+`Authorization: Bearer $OPENAI_API_KEY` — exactly what an Open WebUI gateway
+(`/openai/*`) expects.
+
+```bash
+# .env
+ANNOTATION_LLM_PROVIDER=openai
+ANNOTATION_LLM_MODEL=llama3.1:8b            # a name from GET /openai/models
+ANNOTATION_LLM_BASE_URL=https://<lab-host>/openai
+OPENAI_API_KEY=<gateway Bearer token>
+```
+
+> **Structured output.** By default the annotator sends a JSON schema
+> (function-calling / json_schema). Many self-hosted/Ollama models don't support
+> that and will error. Set `ANNOTATION_STRUCTURED_OUTPUT=false` to fall back to
+> prompt-only JSON — the prompt already requires a strict JSON object and
+> `meme_schema.normalize()` coerces it to the canonical record. Smaller local
+> models also extract less reliably than hosted `gpt-4o-mini`, so spot-check a
+> `--limit 20` run before scaling up.
+
 ### Key flags
 
 | Flag | Meaning |

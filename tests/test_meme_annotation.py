@@ -16,6 +16,26 @@ from src.annotation.annotator import MockAnnotator
 import annotate_memes
 
 
+class TestGraphConfig(unittest.TestCase):
+    """ScrapeGraph-AI config wiring, incl. the self-hosted gateway path."""
+
+    def test_model_prefixed_with_provider(self):
+        cfg = AnnotationConfig()
+        cfg.provider, cfg.model = "openai", "llama3.1:8b"
+        self.assertEqual(cfg.graph_config()["llm"]["model"], "openai/llama3.1:8b")
+
+    def test_base_url_and_key_passed_through(self):
+        cfg = AnnotationConfig()
+        cfg.provider, cfg.api_key = "openai", "lab-token"
+        cfg.base_url = "https://lab-host/openai"
+        llm = cfg.graph_config()["llm"]
+        self.assertEqual(llm["base_url"], "https://lab-host/openai")
+        self.assertEqual(llm["api_key"], "lab-token")
+
+    def test_structured_output_default_true(self):
+        self.assertTrue(AnnotationConfig().structured_output)
+
+
 class TestTemplateDetection(unittest.TestCase):
     def test_known_sections(self):
         cases = {
