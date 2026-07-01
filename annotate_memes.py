@@ -147,14 +147,7 @@ def run(cfg: AnnotationConfig, *, mock: bool, limit: int, force: bool) -> int:
         print("[annotate] Nothing to do.")
         return 0
 
-    proxy_pool = None
-    if not mock:
-        from src.net import proxy_pool_from_env
-        proxy_pool = proxy_pool_from_env()
-        if proxy_pool is not None:
-            print(f"[annotate] proxy pool: loaded {proxy_pool.load()} proxies")
-
-    annotator = build_annotator(cfg, mock=mock, proxy_pool=proxy_pool)
+    annotator = build_annotator(cfg, mock=mock)
     limiter = _RateLimiter(cfg.rate_limit_per_min)
 
     ok = fail = 0

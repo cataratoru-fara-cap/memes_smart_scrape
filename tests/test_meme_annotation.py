@@ -40,16 +40,6 @@ class TestGraphConfig(unittest.TestCase):
         cfg.base_url = None
         self.assertEqual(annotate_memes.verify_llm(cfg), 1)  # no network, clean exit
 
-    def test_proxy_override_wins(self):
-        cfg = AnnotationConfig()
-        cfg.proxy_url = "http://static:1"
-        # pool proxy overrides the static one for this call
-        proxy = cfg.graph_config(proxy_override="http://9.9.9.9:80")["loader_kwargs"]["proxy"]
-        self.assertEqual(proxy, {"server": "http://9.9.9.9:80"})
-        # falls back to the static proxy when no override
-        static = cfg.graph_config()["loader_kwargs"]["proxy"]
-        self.assertEqual(static["server"], "http://static:1")
-
 
 class TestTemplateDetection(unittest.TestCase):
     def test_known_sections(self):

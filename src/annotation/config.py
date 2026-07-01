@@ -81,13 +81,10 @@ class AnnotationConfig:
                 f"(add it to your .env). For local/offline runs use --mock."
             )
 
-    def graph_config(self, proxy_override: str | None = None) -> dict:
+    def graph_config(self) -> dict:
         """
         Build the ScrapeGraph-AI ``graph_config`` dict for this run.
         See https://github.com/ScrapeGraphAI/Scrapegraph-ai for the schema.
-
-        ``proxy_override`` (e.g. from the rotating proxy pool) takes precedence
-        over the static ANNOTATION_PROXY_URL for this call.
         """
         llm: dict = {"model": f"{self.provider}/{self.model}", "temperature": self.temperature}
         if self.api_key:
@@ -99,9 +96,7 @@ class AnnotationConfig:
             "headless": self.headless,
             "verbose": False,
         }
-        if proxy_override:
-            cfg["loader_kwargs"] = {"proxy": {"server": proxy_override}}
-        elif self.proxy_url:
+        if self.proxy_url:
             proxy: dict = {"server": self.proxy_url}
             if self.proxy_username:
                 proxy["username"] = self.proxy_username

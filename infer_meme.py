@@ -39,13 +39,8 @@ def main(argv=None) -> int:
     if args.nodes:
         nodes = json.loads(Path(args.nodes).read_text(encoding="utf-8"))
     else:
-        import sys
         from src.learning.kym_render import KymRenderer
-        from src.net import proxy_pool_from_env
-        pool = proxy_pool_from_env()
-        if pool is not None:
-            print(f"[proxy] loaded {pool.load()} proxies from the pool", file=sys.stderr)
-        renderer = KymRenderer(proxy_pool=pool)
+        renderer = KymRenderer()
 
     pipeline = MemeExtractionPipeline(
         model_path=args.model, renderer=renderer,

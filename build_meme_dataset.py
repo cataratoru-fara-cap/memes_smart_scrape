@@ -71,16 +71,12 @@ def save_dataset(out_path: Path, pages: List[Dict[str, Any]]) -> None:
 
 def run(args: argparse.Namespace) -> int:
     from src.learning.kym_render import KymRenderer
-    from src.net import proxy_pool_from_env
 
     out_path = Path(args.output)
     pages = load_existing(out_path)
     done = {p["url"] for p in pages}
 
-    pool = proxy_pool_from_env()
-    if pool is not None:
-        print(f"[proxy] loaded {pool.load()} proxies from the pool")
-    renderer = KymRenderer(headless=not args.headful, proxy_pool=pool)
+    renderer = KymRenderer(headless=not args.headful)
 
     docs = list(iter_annotation_docs(args.source, args.annotations))
     todo = [
