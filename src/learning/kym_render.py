@@ -60,17 +60,45 @@ def _proxy_from_env() -> Optional[Dict[str, str]]:
 
 
 class KymRenderer:
-    """Playwright-backed page renderer producing GNN-ready nodes."""
+    """Playwright-backed page renderer producing GNN-ready nodes.
+
+    If a ``proxy_pool`` is supplied (or PROXY_POOL_ENABLED in env), each render
+    picks a proxy from the pool and, on failure, rotates to another — dropping
+    dead ones — up to ``max_proxy_tries`` times. Otherwise the single static
+    ``proxy`` (or ANNOTATION_PROXY_URL) is used.
+    """
 
     def __init__(self, headless: bool = True, timeout_ms: int = 30000,
                  proxy: Optional[Dict[str, str]] = None,
-                 max_nodes: int = 1500):
+                 max_nodes: int = 1500, proxy_pool: Any = None,
+                 max_proxy_tries: int = 5):
         self.headless = headless
         self.timeout_ms = timeout_ms
         self.proxy = proxy if proxy is not None else _proxy_from_env()
         self.max_nodes = max_nodes
+        self.pool = proxy_pool
+        self.max_proxy_tries = max_proxy_tries
 
     def render(self, url: str) -> List[Dict[str, Any]]:
+        if self.pool is None:
+            return self._render_once(url, self.proxy)
+
+        last_err: Optional[Exception] = None
+        for _ in range(self.max_proxy_tries):
+            proxy_url = self.pool.get()
+            if proxy_url is None:
+                break
+            try:
+                return self._render_once(url, {"server": proxy_url})
+            except Exception as e:  # noqa: BLE001 - dead proxy, rotate
+                last_err = e
+                self.pool.mark_bad(proxy_url)
+        raise RuntimeError(
+            f"All proxy attempts failed for {url} (pool exhausted or every proxy "
+            f"dead). Last error: {last_err}"
+        )
+
+    def _render_once(self, url: str, proxy: Optional[Dict[str, str]]) -> List[Dict[str, Any]]:
         try:
             from playwright.sync_api import sync_playwright
         except ImportError as e:  # pragma: no cover - only when dep missing
@@ -80,8 +108,8 @@ class KymRenderer:
             ) from e
 
         launch_kwargs: Dict[str, Any] = {"headless": self.headless}
-        if self.proxy:
-            launch_kwargs["proxy"] = self.proxy
+        if proxy:
+            launch_kwargs["proxy"] = proxy
 
         with sync_playwright() as p:
             browser = p.chromium.launch(**launch_kwargs)
@@ -103,6 +131,7 @@ class KymRenderer:
         if not nodes:
             raise RuntimeError(
                 f"No nodes rendered from {url} — page may be blocked (IP ban?) "
-                "or failed to load. Set ANNOTATION_PROXY_URL in .env."
+                "or failed to load. Configure a proxy (ANNOTATION_PROXY_URL) or "
+                "enable the proxy pool (PROXY_POOL_ENABLED=true)."
             )
         return nodes

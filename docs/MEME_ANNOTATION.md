@@ -143,6 +143,23 @@ hash, so the embedding models aren't used at all.
 > `meme_schema.normalize()` coerces it. Local models also extract less reliably
 > than hosted `gpt-4o-mini`, so spot-check a `--limit 20` run before scaling up.
 
+### Proxies (when your IP is banned by KYM)
+
+Two options, both applied to the Playwright render (annotation **and** the
+student renderer):
+
+- **Static proxy** — set `ANNOTATION_PROXY_URL` (+ optional
+  `ANNOTATION_PROXY_USERNAME` / `PASSWORD`). Most reliable if you have a paid one.
+- **Rotating pool** — set `PROXY_POOL_ENABLED=true` to draw from
+  [proxifly/free-proxy-list](https://github.com/proxifly/free-proxy-list). Each
+  call takes a proxy from the pool and rotates past dead ones automatically.
+  Free proxies are flaky (many dead/slow), so expect failures — it's a fallback,
+  not a guarantee. Sanity-check the pool without running the full pipeline:
+
+  ```bash
+  python -m src.net.proxy_pool     # loads the list and validates a sample
+  ```
+
 ### Key flags
 
 | Flag | Meaning |

@@ -229,7 +229,12 @@ ANNOTATION_PROXY_URL=http://host:port
 # ANNOTATION_PROXY_USERNAME=user   # if the proxy requires auth
 # ANNOTATION_PROXY_PASSWORD=pass
 ```
-The pipeline passes these directly to Playwright via ScrapeGraph-AI's `loader_kwargs`. Without a proxy, a banned IP will cause every page to return the ban HTML and the annotator will raise `"Annotation extracted no title — page is likely blocked … (IP ban?)"`.
+Or use the rotating free-proxy pool (rotates past dead proxies automatically):
+```bash
+PROXY_POOL_ENABLED=true
+python -m src.net.proxy_pool        # sanity-check the pool first
+```
+The pipeline passes the chosen proxy to Playwright via ScrapeGraph-AI's `loader_kwargs`. Without a proxy, a banned IP returns the ban HTML and the annotator raises `"Annotation extracted no title — page is likely blocked … (IP ban?)"`. Free proxies are unreliable, so a paid `ANNOTATION_PROXY_URL` is more dependable.
 
 **`RuntimeError: scrapegraphai is not installed`**
 Run `pip install -r requirements-annotation.txt` and `playwright install chromium`.

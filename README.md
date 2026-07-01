@@ -119,6 +119,8 @@ memes_smart_scrape/
     ├── db/                     # MongoDB hub shared by all stages
     │   ├── store.py            #   pure merge logic + InMemoryStore (dep-free)
     │   └── mongo.py            #   pymongo MongoStore (urls + annotations)
+    ├── net/
+    │   └── proxy_pool.py       # rotating free-proxy pool (proxifly) + failover
     ├── annotation/             # teacher (ScrapeGraph-AI)
     │   ├── meme_schema.py      #   extracted fields (entry vs editorial)
     │   ├── annotator.py        #   ScrapeGraph-AI wrapper + MockAnnotator

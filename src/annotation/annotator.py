@@ -30,10 +30,16 @@ class Annotator(Protocol):
 # --------------------------------------------------------------------------
 
 class ScrapeGraphAnnotator:
-    """Extract meme data with ScrapeGraph-AI + the configured LLM."""
+    """Extract meme data with ScrapeGraph-AI + the configured LLM.
 
-    def __init__(self, config: AnnotationConfig):
+    If ``proxy_pool`` is set, each call renders through a proxy drawn from the
+    pool and marks it bad on failure (so the retry picks a fresh one); otherwise
+    the static ANNOTATION_PROXY_URL is used.
+    """
+
+    def __init__(self, config: AnnotationConfig, proxy_pool: Any = None):
         self.config = config
+        self.pool = proxy_pool
         config.require_api_key()
         self._graph_cls = self._import_graph()
         self._graph_config = config.graph_config()
@@ -60,16 +66,26 @@ class ScrapeGraphAnnotator:
             if self.config.structured_output else None
         )
 
+        # Rotate a pool proxy per call; mark it bad if this attempt fails so the
+        # caller's retry loop lands on a different one.
+        proxy = self.pool.get() if self.pool is not None else None
+        graph_config = self.config.graph_config(proxy_override=proxy) if proxy else self._graph_config
+
         kwargs: Dict[str, Any] = {
             "prompt": prompt,
             "source": url,
-            "config": self._graph_config,
+            "config": graph_config,
         }
         if schema is not None:
             kwargs["schema"] = schema
 
-        graph = self._graph_cls(**kwargs)
-        result = graph.run()
+        try:
+            graph = self._graph_cls(**kwargs)
+            result = graph.run()
+        except Exception:
+            if proxy is not None and self.pool is not None:
+                self.pool.mark_bad(proxy)
+            raise
 
         # ScrapeGraph-AI may return a pydantic model, a dict, or a JSON string.
         if hasattr(result, "model_dump"):
@@ -119,6 +135,7 @@ class MockAnnotator:
         return meme_schema.normalize(rec, template_type)
 
 
-def build_annotator(config: AnnotationConfig, mock: bool = False) -> Annotator:
+def build_annotator(config: AnnotationConfig, mock: bool = False,
+                    proxy_pool: Any = None) -> Annotator:
     """Factory: return a mock or real annotator."""
-    return MockAnnotator(config) if mock else ScrapeGraphAnnotator(config)
+    return MockAnnotator(config) if mock else ScrapeGraphAnnotator(config, proxy_pool=proxy_pool)
