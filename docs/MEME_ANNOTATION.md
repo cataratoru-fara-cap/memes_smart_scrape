@@ -103,28 +103,45 @@ python annotate_memes.py --provider anthropic --model claude-haiku-4-5
 python annotate_memes.py --provider ollama   --model llama3        # local, free
 ```
 
-### Self-hosted OpenAI-compatible gateway (Open WebUI / Ollama)
+### Self-hosted Open WebUI / Ollama gateway
 
-Point the `openai` provider at any OpenAI-compatible endpoint via `base_url`.
-The pipeline calls `POST {base_url}/chat/completions` with
-`Authorization: Bearer $OPENAI_API_KEY` — exactly what an Open WebUI gateway
-(`/openai/*`) expects.
+Point the `openai` provider at the gateway's OpenAI-compatible surface via
+`base_url`. The pipeline calls `POST {base_url}/chat/completions` with
+`Authorization: Bearer $OPENAI_API_KEY`.
+
+> On the lab's Open WebUI gateway the `/openai/*` routes are **disabled**
+> (`{"detail":"OpenAI API is disabled"}`); use the Ollama gateway's own
+> OpenAI-compatible endpoints under **`/ollama/v1`** instead.
 
 ```bash
 # .env
 ANNOTATION_LLM_PROVIDER=openai
-ANNOTATION_LLM_MODEL=llama3.1:8b            # a name from GET /openai/models
-ANNOTATION_LLM_BASE_URL=https://<lab-host>/openai
+ANNOTATION_LLM_MODEL=llama3.3:70b               # id from GET /ollama/v1/models
+ANNOTATION_LLM_BASE_URL=https://<lab-host>/ollama/v1
 OPENAI_API_KEY=<gateway Bearer token>
+ANNOTATION_STRUCTURED_OUTPUT=false              # Ollama models: prompt-only JSON
 ```
 
+Check connectivity and that your model name resolves before a real run:
+
+```bash
+python annotate_memes.py --verify
+```
+
+**Choosing a model.** For rich JSON extraction prefer a strong *instruction*
+model with a long context: `llama3.3:70b` (best here), or lighter
+`qwen2.5:32b` / `mistral-small3.2:24b`. Avoid **reasoning** models
+(`deepseek-r1:*`, the `qwen3:*` family) — they emit `<think>…</think>` traces
+that corrupt JSON output. Skip the `*-embed*` / `llava` (vision) / `codellama`
+entries; this task needs a text chat model. Our node encoder uses a char-n-gram
+hash, so the embedding models aren't used at all.
+
 > **Structured output.** By default the annotator sends a JSON schema
-> (function-calling / json_schema). Many self-hosted/Ollama models don't support
-> that and will error. Set `ANNOTATION_STRUCTURED_OUTPUT=false` to fall back to
+> (function-calling / json_schema); Ollama models generally don't support that
+> and will error, so set `ANNOTATION_STRUCTURED_OUTPUT=false` to fall back to
 > prompt-only JSON — the prompt already requires a strict JSON object and
-> `meme_schema.normalize()` coerces it to the canonical record. Smaller local
-> models also extract less reliably than hosted `gpt-4o-mini`, so spot-check a
-> `--limit 20` run before scaling up.
+> `meme_schema.normalize()` coerces it. Local models also extract less reliably
+> than hosted `gpt-4o-mini`, so spot-check a `--limit 20` run before scaling up.
 
 ### Key flags
 

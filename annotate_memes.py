@@ -185,7 +185,39 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--limit", type=int, default=0, help="Annotate at most N records (0 = all).")
     p.add_argument("--force", action="store_true", help="Re-annotate even if already done.")
     p.add_argument("--mock", action="store_true", help="Offline mock annotator (no API/network).")
+    p.add_argument("--verify", action="store_true",
+                   help="Check LLM gateway connectivity (GET {base_url}/models) and exit.")
     return p.parse_args(argv)
+
+
+def verify_llm(cfg: AnnotationConfig) -> int:
+    """GET {base_url}/models with the Bearer token; list models and check --model."""
+    import requests
+
+    if not cfg.base_url:
+        print("[verify] Set ANNOTATION_LLM_BASE_URL (e.g. https://<host>/ollama/v1).")
+        return 1
+    url = cfg.base_url.rstrip("/") + "/models"
+    headers = {"Authorization": f"Bearer {cfg.api_key}"} if cfg.api_key else {}
+    try:
+        r = requests.get(url, headers=headers, timeout=30)
+    except Exception as e:  # noqa: BLE001
+        print(f"[verify] request to {url} failed: {e}")
+        return 1
+
+    print(f"[verify] GET {url} -> {r.status_code}")
+    if r.status_code != 200:
+        print(f"[verify] {r.text[:300]}")
+        return 1
+    ids = [m.get("id") for m in r.json().get("data", [])]
+    print(f"[verify] {len(ids)} models available:")
+    for i in ids:
+        print(f"    - {i}")
+    if cfg.model in ids:
+        print(f"[verify] OK: configured model '{cfg.model}' is available.")
+        return 0
+    print(f"[verify] WARNING: configured model '{cfg.model}' is NOT in the list above.")
+    return 1
 
 
 def main(argv=None) -> int:
@@ -205,6 +237,8 @@ def main(argv=None) -> int:
         cfg.model = args.model
     if args.concurrency:
         cfg.concurrency = args.concurrency
+    if args.verify:
+        return verify_llm(cfg)
     return run(cfg, mock=args.mock, limit=args.limit, force=args.force)
 
 

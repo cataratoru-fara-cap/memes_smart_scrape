@@ -35,6 +35,11 @@ class TestGraphConfig(unittest.TestCase):
     def test_structured_output_default_true(self):
         self.assertTrue(AnnotationConfig().structured_output)
 
+    def test_verify_requires_base_url(self):
+        cfg = AnnotationConfig()
+        cfg.base_url = None
+        self.assertEqual(annotate_memes.verify_llm(cfg), 1)  # no network, clean exit
+
 
 class TestTemplateDetection(unittest.TestCase):
     def test_known_sections(self):
